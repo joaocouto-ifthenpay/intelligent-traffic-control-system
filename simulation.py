@@ -3,7 +3,7 @@ from typing import List, Dict, Tuple, Set, Optional
 
 from scipy.spatial import distance
 
-from road import Road
+from traffic_controller import TrafficController
 from traffic_signal import TrafficSignal
 from vehicle_generator import VehicleGenerator
 from window import Window
@@ -13,7 +13,7 @@ class Simulation:
     def __init__(self, max_gen: int = None):
         self.t = 0.0  # Time
         self.dt = 1 / 60  # Time step
-        self.roads: List[Road] = []
+        self.traffic_controllers: List[TrafficController] = []
         self.generators: List[VehicleGenerator] = []
         self.traffic_signals: List[TrafficSignal] = []
 
@@ -29,24 +29,29 @@ class Simulation:
         self._inbound_roads: Set[int] = set()
         self._outbound_roads: Set[int] = set()
 
-        self._intersections: Dict[int, Set[int]] = {}  # {Road index: [intersecting roads' indexes]}
+        self._intersections: Dict[int, Set[int]] = {}  # {TrafficController index: [intersecting roads' indexes]}
         self.max_gen: Optional[int] = max_gen  # Vehicle generation limit
         self._waiting_times_sum: float = 0  # for vehicles that completed the journey
 
     def add_intersections(self, intersections_dict: Dict[int, Set[int]]) -> None:
         self._intersections.update(intersections_dict)
 
-    def add_road(self, start: Tuple[int, int], end: Tuple[int, int]) -> None:
-        road = Road(start, end, index=len(self.roads))
-        self.roads.append(road)
+    def add_traffic_controller(self, start: Tuple[int, int], end: Tuple[int, int]) -> None:
+        traffic_controller = TrafficController(
+            start, end, index=len(self.traffic_controllers), jid="atc_agent@localhost", pwd="password"
+        )
+        #await traffic_controller.start(auto_register=True)
+        self.traffic_controllers.append(traffic_controller)
 
-    def add_roads(self, roads: List[Tuple[int, int]]) -> None:
-        for road in roads:
-            self.add_road(*road)
+    def add_traffic_controllers(self, traffic_controllers: List[Tuple[int, int]]) -> None:
+        for traffic_controller in traffic_controllers:
+            self.add_traffic_controller(*traffic_controller)
 
     def add_generator(self, vehicle_rate, paths: List[List]) -> None:
-        inbound_roads: List[Road] = [self.roads[roads[0]] for weight, roads in paths]
-        inbound_dict: Dict[int: Road] = {road.index: road for road in inbound_roads}
+        inbound_roads: List[TrafficController] = [self.traffic_controllers[roads[0]] for weight, roads in paths]
+        inbound_dict: Dict[int: TrafficController] = {
+            traffic_controller.index: traffic_controller for traffic_controller in inbound_roads
+        }
         vehicle_generator = VehicleGenerator(vehicle_rate, paths, inbound_dict)
         self.generators.append(vehicle_generator)
 
@@ -54,10 +59,11 @@ class Simulation:
             self._inbound_roads.add(roads[0])
             self._outbound_roads.add(roads[-1])
 
-    def add_traffic_signal(self, roads: List[List[int]], cycle: List[Tuple],
+    def add_traffic_signal(self, traffic_controllers: List[List[int]], cycle: List[Tuple],
                            slow_distance: float, slow_factor: float, stop_distance: float) -> None:
-        roads: List[List[Road]] = [[self.roads[i] for i in road_group] for road_group in roads]
-        traffic_signal = TrafficSignal(roads, cycle, slow_distance, slow_factor, stop_distance)
+        traffic_controllers: List[List[TrafficController]] = \
+            [[self.traffic_controllers[i] for i in traffic_controller_group] for traffic_controller_group in traffic_controllers]
+        traffic_signal = TrafficSignal(traffic_controllers, cycle, slow_distance, slow_factor, stop_distance)
         self.traffic_signals.append(traffic_signal)
 
     @property
@@ -107,7 +113,7 @@ class Simulation:
             completed_wait_time = round(self._waiting_times_sum / n_completed_journey, 2)
         if self.n_vehicles_on_map:
             total_on_map_wait_time = sum(vehicle.get_wait_time(self.t) for i in self.non_empty_roads
-                                         for vehicle in self.roads[i].vehicles)
+                                         for vehicle in self.traffic_controllers[i].vehicles)
             on_map_wait_time = total_on_map_wait_time / self.n_vehicles_on_map
         return completed_wait_time + on_map_wait_time
 
@@ -124,6 +130,18 @@ class Simulation:
         if not self._gui:
             self._gui = Window(self)
         self._gui.update()
+
+    async def run_agents(self, action: Optional[int] = None) -> None:
+        """ Executa um passo de simulação para todos os agentes """
+        n = 180  # 3 simulation seconds
+        if action:
+            await self.update_agents()
+            await self._detect_collisions()
+            await self._check_out_of_bounds_agents()
+            await self._update_signals()
+            if self.completed or self.gui_closed:
+                return
+        self._loop(n)
 
     def run(self, action: Optional[int] = None) -> None:
         """ Performs n simulation updates. Terminates early upon completion or GUI closing
@@ -144,7 +162,7 @@ class Simulation:
         """ Updates the roads, generates vehicles, detect collisions and updates the gui """
         # Update every road
         for i in self._non_empty_roads:
-            self.roads[i].update(self.dt, self.t)
+            self.traffic_controllers[i].update(self.dt, self.t)
 
         # Add vehicles
         for gen in self.generators:
@@ -186,9 +204,9 @@ class Simulation:
         Updates the self.collision_detected attribute """
         radius = 3
         for main_road, intersecting_roads in self.intersections.items():
-            vehicles = self.roads[main_road].vehicles
+            vehicles = self.traffic_controllers[main_road].vehicles
             intersecting_vehicles = chain.from_iterable(
-                self.roads[i].vehicles for i in intersecting_roads)
+                self.traffic_controllers[i].vehicles for i in intersecting_roads)
             for vehicle in vehicles:
                 for intersecting in intersecting_vehicles:
                     if distance.euclidean(vehicle.position, intersecting.position) < radius:
@@ -200,7 +218,7 @@ class Simulation:
         new_non_empty_roads = set()
         new_empty_roads = set()
         for i in self._non_empty_roads:
-            road = self.roads[i]
+            road = self.traffic_controllers[i]
             lead = road.vehicles[0]
             # If first vehicle is out of road bounds
             if lead.x >= road.length:
@@ -214,7 +232,7 @@ class Simulation:
                     lead.current_road_index += 1
                     next_road_index = lead.path[lead.current_road_index]
                     new_non_empty_roads.add(next_road_index)
-                    self.roads[next_road_index].vehicles.append(lead)
+                    self.traffic_controllers[next_road_index].vehicles.append(lead)
                     # road.vehicles.popleft()
                     if not road.vehicles:
                         new_empty_roads.add(road.index)

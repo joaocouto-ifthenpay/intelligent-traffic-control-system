@@ -1,3 +1,10 @@
+from spade.agent import Agent
+from spade.behaviour import CyclicBehaviour
+from spade.template import Template
+from spade.message import Message
+import asyncio
+import spade
+
 from collections import deque
 from typing import Deque, Optional, Tuple
 
@@ -7,8 +14,11 @@ from traffic_signal import TrafficSignal
 from vehicle import Vehicle
 
 
-class Road:
-    def __init__(self, start: Tuple[int, int], end: Tuple[int, int], index: int):
+class Road(Agent):
+    def __init__(self, start: Tuple[int, int], end: Tuple[int, int], index: int, jid, password):
+        super().__init__(jid, password)
+        print(jid)
+        print(password)
         self.start = start
         self.end = end
         self.index = index
@@ -22,6 +32,34 @@ class Road:
         self.has_traffic_signal: bool = False
         self.traffic_signal: Optional[TrafficSignal] = None
         self.traffic_signal_group: Optional[int] = None
+
+    async def setup(self):
+        # Define a behavior to perceive and interact with the environment
+        class EnvironmentInteraction(CyclicBehaviour):
+            async def run(self):
+                print("EnvironmentInteraction behavior is running")
+                # Perceive environment data - you can use ACL messages or other means
+                #aircraft_position = self.get_aircraft_position()
+                #weather_data = self.get_weather_data()
+                #runway_status = self.get_runway_status()
+
+                # Make decisions based on perceptions and update the environment
+                # Example: Check for conflicts and send instructions to aircraft
+
+            #def get_aircraft_position(self):
+                # Implement logic to retrieve aircraft positions from the environment
+            #    pass
+
+            #def get_weather_data(self):
+                # Implement logic to retrieve weather data from the environment
+            #    pass
+
+            #def get_runway_status(self):
+                # Implement logic to retrieve runway status from the environment
+            #    pass
+
+        # Add the behavior to the agent
+        #self.add_behaviour(EnvironmentInteraction())
 
     def set_traffic_signal(self, signal: TrafficSignal, group: int):
         self.has_traffic_signal = True
@@ -47,9 +85,8 @@ class Road:
             # Check for traffic signal
             if self.traffic_signal_state:
                 # If traffic signal is green (or doesn't exist), let vehicles pass
-                lead.unstop(sim_t)
-                for vehicle in self.vehicles:
-                    vehicle.unslow()
+                self.notify_vehicle_to_start(sim_t, lead)
+
             elif self.has_traffic_signal:
                 # The traffic signal is red (existence checked to access its stop_distance)
                 lead_can_stop_safely = lead.x <= self.length - self.traffic_signal.stop_distance / 1.5
@@ -68,3 +105,9 @@ class Road:
             for i in range(1, n):
                 lead = self.vehicles[i - 1]
                 self.vehicles[i].update(lead, dt, self)
+
+    def notify_vehicle_to_start(self, sim_t, lead):
+        #print('Go!')
+        lead.unstop(sim_t)
+        for vehicle in self.vehicles:
+            vehicle.unslow()

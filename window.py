@@ -11,19 +11,19 @@ from pygame.draw import polygon
 
 class Window:
     def __init__(self, simulation):
-        self._width = 1000
-        self._height = 630
+        self._width = 700
+        self._height = 600
 
         self.closed: bool = False
         self._sim = simulation
 
         self._background_color = (235, 235, 235)
         self._screen = pygame.display.set_mode((self._width, self._height))
-        pygame.display.set_caption('AI Traffic Lights Controller')
+        pygame.display.set_caption('Sistema Multi-Agente de Controlo de Tráfego')
         pygame.display.flip()
         pygame.font.init()
-        font = f'Lucida Console'
-        self._text_font = pygame.font.SysFont(font, 16)
+        font = f'freesans'
+        self._text_font = pygame.font.SysFont(font, 18)
         self._zoom = 5
         self._offset = (0, 0)
         self._mouse_last = (0, 0)
@@ -36,29 +36,6 @@ class Window:
             # Quit program if window is closed
             if event.type == pygame.QUIT:
                 self.closed = True
-            # Handle mouse events
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                # If mouse button down
-                if event.button == pygame.BUTTON_LEFT:
-                    # Left click
-                    x, y = pygame.mouse.get_pos()
-                    x0, y0 = self._offset
-                    self._mouse_last = (x - x0 * self._zoom, y - y0 * self._zoom)
-                    self._mouse_down = True
-                if event.button == pygame.BUTTON_WHEELUP:
-                    # Mouse wheel up
-                    self._zoom *= (self._zoom ** 2 + self._zoom / 4 + 1) / (self._zoom ** 2 + 1)
-                if event.button == pygame.BUTTON_WHEELDOWN:
-                    # Mouse wheel down
-                    self._zoom *= (self._zoom ** 2 + 1) / (self._zoom ** 2 + self._zoom / 4 + 1)
-            elif event.type == pygame.MOUSEMOTION:
-                # Drag content
-                if self._mouse_down:
-                    x1, y1 = self._mouse_last
-                    x2, y2 = pygame.mouse.get_pos()
-                    self._offset = ((x2 - x1) / self._zoom, (y2 - y1) / self._zoom)
-            elif event.type == pygame.MOUSEBUTTONUP:
-                self._mouse_down = False
 
     def _convert(self, x, y=None):
         """Converts simulation coordinates to screen coordinates"""
@@ -106,7 +83,7 @@ class Window:
         # polygon(self._screen, color, points, width)
         # return screen_x, screen_y
 
-    def _draw_arrow(self, pos, size, angle=None, cos=None, sin=None, color=(180, 180, 180)) -> None:
+    def _draw_arrow(self, pos, size, angle=None, cos=None, sin=None, color=(85, 85, 85)) -> None: #180,180,180
         if angle:
             cos, sin = np.cos(angle), np.sin(angle)
         self._rotated_box(pos,
@@ -124,7 +101,7 @@ class Window:
 
     def _draw_roads(self) -> None:
         # road_index_coordinates = [] # For debugging purposes
-        for road in self._sim.roads:
+        for road in self._sim.traffic_controllers:
             # Draw road background
             self._rotated_box(
                 road.start,
@@ -159,6 +136,13 @@ class Window:
         y = road.start[1] + sin * vehicle.x
         self._rotated_box((x, y), (l, h), cos=cos, sin=sin, centered=True)
 
+        #radius = vehicle.width*4  # Usando a metade da largura como raio para representar um círculo
+        #x = road.start[0] + road.angle_cos * vehicle.x
+        #y = road.start[1] + road.angle_sin * vehicle.x
+
+        #center = self._convert(x, y)
+        #pygame.draw.circle(self._screen, (255, 0, 0), center, int(radius))
+
         # # For debugging purposes
         # screen_x, screen_y = self._rotated_box((x, y), (l, h), cos=cos, sin=sin, centered=True)
         # if DRAW_VEHICLE_IDS:
@@ -168,13 +152,13 @@ class Window:
 
     def _draw_vehicles(self) -> None:
         for i in self._sim.non_empty_roads:
-            road = self._sim.roads[i]
+            road = self._sim.traffic_controllers[i]
             for vehicle in road.vehicles:
                 self._draw_vehicle(vehicle, road)
 
     def _draw_signals(self) -> None:
         for signal in self._sim.traffic_signals:
-            for i in range(len(signal.roads)):
+            for i in range(len(signal.traffic_controllers)):
                 red, green = (255, 0, 0), (0, 255, 0)
                 if signal.current_cycle == (False, False):
                     # Temp state, yellow color
@@ -182,7 +166,7 @@ class Window:
                     color = yellow if signal.cycle[signal.current_cycle_index - 1][i] else red
                 else:
                     color = green if signal.current_cycle[i] else red
-                for road in signal.roads[i]:
+                for road in signal.traffic_controllers[i]:
                     a = 0
                     position = ((1 - a) * road.end[0] + a * road.start[0],
                                 (1 - a) * road.end[1] + a * road.start[1])
@@ -193,13 +177,13 @@ class Window:
         def render(text, color=(0, 0, 0), background=self._background_color):
             return self._text_font.render(text, True, color, background)
 
-        t = render(f'Time: {self._sim.t:.1f}')
+        t = render(f'Tempo: {self._sim.t:.1f}')
         if self._sim.max_gen:
-            n_max_gen = render(f'Max Gen: {self._sim.max_gen}')
+            n_max_gen = render(f'Veículos gerados máx: {self._sim.max_gen}')
             self._screen.blit(n_max_gen, (10, 50))
-        n_vehicles_generated = render(f'Vehicles Generated: {self._sim.n_vehicles_generated}')
-        n_vehicles_on_map = render(f'Vehicles On Map: {self._sim.n_vehicles_on_map}')
-        average_wait_time = render(f'Current Wait Time: {self._sim.current_average_wait_time:.1f}')
+        n_vehicles_generated = render(f'Veículos gerados: {self._sim.n_vehicles_generated}')
+        n_vehicles_on_map = render(f'Veículos na estrada: {self._sim.n_vehicles_on_map}')
+        average_wait_time = render(f'Tempo de espera: {self._sim.current_average_wait_time:.1f}')
         self._screen.blit(t, (10, 20))
         self._screen.blit(n_vehicles_generated, (10, 70))
         self._screen.blit(n_vehicles_on_map, (10, 90))

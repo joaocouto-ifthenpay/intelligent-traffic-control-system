@@ -2,19 +2,19 @@ from typing import List, Dict, Optional
 
 from numpy.random import randint
 
-from road import Road
+from traffic_controller import TrafficController
 from vehicle import Vehicle
 
 
 class VehicleGenerator:
-    def __init__(self, vehicle_rate: int, paths: List[List], inbound_roads: Dict[int, Road]):
+    def __init__(self, vehicle_rate: int, paths: List[List], inbound_roads: Dict[int, TrafficController]):
         self._vehicle_rate: int = vehicle_rate
         self._paths: List[List] = paths
         self._prev_gen_time: float = 0
 
         # Storing the list of the first roads of the vehicle paths. Used in the update() function
         # upon vehicle generation to check if there's sufficient space in the road to add a vehicle
-        self._inbound_roads: Dict[int, Road] = inbound_roads
+        self._inbound_roads: Dict[int, TrafficController] = inbound_roads
 
     def _generate_vehicle(self) -> Vehicle:
         """Returns a random vehicle from self.vehicles with random proportions"""

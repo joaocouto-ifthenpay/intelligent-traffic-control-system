@@ -14,7 +14,8 @@ class Vehicle(Agent):
     def __init__(self, path: List[int], jid, password):
         super().__init__(jid, password)
         # self.environment = environment
-
+        print(jid)
+        print(password)
         self.index = 0
         self.length = 4
         self.width = 2
@@ -123,6 +124,7 @@ class Vehicle(Agent):
             self._waiting_time += (t - self._last_time_stopped)
             self._last_time_stopped = None
             self.is_stopped = False
+            #print('Arrancar!')
 
     def slow(self, traffic_light_slow_factor):
         self.v_max = self._v_max * traffic_light_slow_factor

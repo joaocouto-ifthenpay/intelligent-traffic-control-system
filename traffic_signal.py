@@ -2,9 +2,9 @@ from typing import List, Tuple
 
 
 class TrafficSignal:
-    def __init__(self, roads: List[List], cycle: List[Tuple],
+    def __init__(self, traffic_controllers: List[List], cycle: List[Tuple],
                  slow_distance: float, slow_factor: float, stop_distance: float):
-        self.roads: List[List] = roads
+        self.traffic_controllers: List[List] = traffic_controllers
         # self.roads_indexes: Set[int] = set(road.index for road in chain.from_iterable(roads))
         self.cycle: List[Tuple[bool]] = cycle
         self.current_cycle_index = 0
@@ -12,8 +12,8 @@ class TrafficSignal:
         self.slow_factor: float = slow_factor
         self.stop_distance: float = stop_distance
         self.prev_update_time: float = 0
-        for i in range(len(self.roads)):
-            for road in self.roads[i]:
+        for i in range(len(self.traffic_controllers)):
+            for road in self.traffic_controllers[i]:
                 road.set_traffic_signal(self, i)
 
     @property
